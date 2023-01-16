@@ -1,1 +1,123 @@
-test
+import yfinance as yf
+import requests
+import pandas as pd
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+import numpy as np
+
+url = 'https://www.alphavantage.co/query?function=FEDERAL_FUNDS_RATE&interval=monthly&apikey=<Yourapikey>'
+r = requests.get(url)
+FED_raw = r.json()
+
+# Extract the data from the FED dictionary
+FED_d = FED_raw['data']
+
+# Create a list of tuples with date and value
+data_tuples = [(item['date'], float(item['value'])) for item in FED_d]
+
+# Create a DataFrame from the list of tuples
+fed_df = pd.DataFrame(data_tuples, columns=['date', 'value'])
+
+#CPI
+url = 'https://www.alphavantage.co/query?function=CPI&interval=monthly&apikey=<Yourapikey>'
+r = requests.get(url)
+CPI_raw = r.json()
+
+# Extract the data from the FED dictionary
+CPI_d = CPI_raw['data']
+
+# Create a list of tuples with date and value
+CPIdata_tuples = [(item['date'], float(item['value'])) for item in CPI_d]
+
+# Create a DataFrame from the list of tuples
+cpi_df = pd.DataFrame(CPIdata_tuples, columns=['date', 'value'])
+
+#GDP
+url = 'https://www.alphavantage.co/query?function=REAL_GDP&interval=annual&apikey=Yourapikey'
+r = requests.get(url)
+GDP_raw = r.json()
+
+# Extract the data from the FED dictionary
+GDP_d = GDP_raw['data']
+
+# Create a list of tuples with date and value
+GDPdata_tuples = [(item['date'], float(item['value'])) for item in GDP_d]
+
+# Create a DataFrame from the list of tuples
+GDP_df = pd.DataFrame(GDPdata_tuples, columns=['date', 'value'])
+
+#SPY
+SPY = yf.Ticker("SPY")
+hist = SPY.history(period="max")
+spy_df = pd.DataFrame(hist)
+
+# Extract only date and close prices
+spy_df = spy_df[['Close']]
+spy_df.reset_index(inplace=True)
+spy_df.rename(columns={'Date': 'date', 'Close': 'price'}, inplace=True)
+
+cpi_df['date'] = pd.to_datetime(cpi_df['date'])
+fed_df['date'] = pd.to_datetime(fed_df['date'])
+spy_df['date'] = pd.to_datetime(spy_df['date'])
+
+merged_df = pd.concat([spy_df, cpi_df, fed_df], axis=1, join='inner')
+
+# Prepare the data
+y = GDP_df['value']
+X = merged_df.drop(columns=['date'])
+
+#combine X and y
+data = pd.concat([X, y], axis=1)
+
+#drop duplicates
+data.drop_duplicates(inplace=True)
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(data.drop(columns='value'), data['value'], test_size=0.2, random_state=0)
+
+y_train.dropna(inplace=True)
+y_test.dropna(inplace=True)
+
+data.dropna(inplace=True)
+X_train = data.drop(columns='value')
+y_train = data['value']
+
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+
+X_train = pd.DataFrame(X_train)
+data_train = pd.concat([X_train, y_train], axis=1)
+
+# Fit the linear regression model
+reg = LinearRegression().fit(X_train, y_train)
+
+# Extract the coefficients of the model
+coefficients = reg.coef_
+
+# Number of iterations for the simulation
+n_iterations = 1000
+
+# Initialize lists to store the results
+predictions = []
+
+# Run the simulation
+for i in range(n_iterations):
+    # Generate random input variable values
+    X_random = np.random.randn(X_train.shape[0], X_train.shape[1])
+    # Scale the random values
+    X_random = scaler.transform(X_random)
+    # Use the model to make a prediction
+    y_pred = reg.predict(X_random)
+    # Append the prediction to the list
+    predictions.append(y_pred)
+
+# Convert the list of predictions to a Numpy array
+predictions = np.array(predictions)
+
+# Calculate the mean and standard deviation of the predictions
+std = predictions.std(axis=0)
+mean = predictions.mean(axis=0)
+
